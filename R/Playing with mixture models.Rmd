@@ -1,0 +1,103 @@
+---
+title: "Playing with mixture models"
+author: "John Fee"
+date: "2023-03-25"
+output: bookdown::github_document2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 6
+  )
+```
+
+```{r load_packages}
+library(magrittr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+library(ggplot2)
+theme_set(cowplot::theme_cowplot())
+
+set.seed(1)
+```
+
+
+# Analytic and synthetic views on mixture models
+
+The analytical formulation for mixture models is a convex combination of densities.  That is,
+
+\begin{align}
+y \sim \sum_{g = 1}^{G}\eta_{g}f(\cdot|\theta_{g})
+\end{align}
+
+where the the $\eta_{g}$ terms sum to 1 and the parameters of the density function $f$ are allowed to vary (though this could be relaxed).  Contrast this synthetic (constructivist?) approach where for each observation $i$ in our dataset we sample the index set $g = \{1,2,\ldots,G\}$ using the weights $\eta_{g}$, and then sample from the chosen density $f_{g}$.
+
+\begin{align}
+y_{i} | z_{i} ~ f(\cdot | \theta_{z_{i}}) && \text{with } P(z_{i} = g = \eta_{g})
+\end{align}
+
+
+Let's use the synthetic representation to simulate what a mixture distribution could look like!
+
+```{r normal-simulation,cache = TRUE}
+#| fig.cap = "A univariate mixture of normal distributions with generating model is $f(y) \\sim .2 \\times \\mathcal{N}(1,1) + .8 \\times \\mathcal{N}(5,1)$"
+
+sim_parameters <- data.frame(
+  eta = c(.2,.8),
+  mu = c(1,5),
+  sigma = c(1,1)
+)
+
+sample_synthetic <- function(n,sim_parameters){
+  # Get indices to use for each density function
+  my_index <- sample(
+    x = 1:nrow(sim_parameters),
+    prob = sim_parameters$eta,
+    size = n,
+    replace = TRUE
+    ) %>%
+    data.frame(index = .) %>%
+    count(index)
+
+  # Generate # samples from each density according sampled density indices
+  my_index %>%
+    purrr::pmap(
+      function(index,n) rnorm(n,sim_parameters$mu[index],sim_parameters$sigma[index])
+    ) %>%
+    purrr::flatten_dbl()
+  
+}
+
+n <- 1000
+
+data.frame(
+  "synthetic" = sample_synthetic(n,sim_parameters)
+) %>%
+  ggplot(aes(x = synthetic)) +
+  geom_histogram(
+    aes(y = ..density..),
+    color = "black",
+    fill = "lightgray",
+    linewidth = 1
+    ) +
+  geom_density(
+    color = "red",
+    linetype = "dashed",
+    linewidth = 1
+    ) +
+  labs(
+    x = "Sampled values",
+    y = "Density",
+    title = glue::glue("Empirical distribution of sampled values from a normal mixture")
+  )
+```
+
+## Note for later
+
+The text mentions that mixtures of binomial distributions may run into identifiability issues, which might be a problem because that is the application I have in mind!
